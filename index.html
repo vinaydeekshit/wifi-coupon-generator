@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Passport Validation with WiFi Coupon</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #welcomePrompt, #qrSection, #passportSection, #couponSection {
+            display: none;
+        }
+        #qrVideo, #passportVideo {
+            width: 100%;
+            max-width: 600px;
+        }
+        #passportPreview {
+            max-width: 600px;
+            margin-top: 10px;
+        }
+        #loadingSpinner, #passportValidated, #passportNotValidated, #nextStep {
+            display: none;
+            margin-top: 10px;
+        }
+        #couponCode {
+            margin-top: 20px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .camera-controls {
+            margin-top: 10px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body onload="showWelcomeMessage()">
+
+    <!-- Welcome Prompt -->
+    <div id="welcomePrompt">
+        <h1>Welcome to the WiFi Coupon Generation System!</h1>
+    </div>
+
+    <!-- QR Code Section -->
+    <div id="qrSection">
+        <h2>Scan Barcode</h2>
+        <video id="qrVideo" autoplay></video>
+        <div id="qrData"></div>
+        <button id="nextStep" onclick="goToNextStep()">Next Step</button>
+    </div>
+
+    <!-- Passport Section -->
+    <div id="passportSection">
+        <h2>Passport Validation</h2>
+        <div id="passportVideoContainer">
+            <video id="passportVideo" autoplay></video>
+            <div class="camera-controls">
+                <button onclick="flipCamera()">Flip Camera</button>
+                <button onclick="takePassportPhoto()">Take Photo</button>
+            </div>
+        </div>
+        <img id="passportPreview" alt="Passport Preview">
+        <div id="loadingSpinner">
+            <p>Loading...</p>
+        </div>
+        <div id="passportValidated">
+            <p>Passport Validated Successfully!</p>
+        </div>
+        <div id="passportNotValidated">
+            <p>Passport Not Validated. Please Try Again.</p>
+        </div>
+    </div>
+
+    <!-- Coupon Section -->
+    <div id="couponSection" class="hidden">
+        <div id="couponCode"></div>
+        <button id="printButton" onclick="printCoupon()">Print Receipt</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.3/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/LazarSoft/jsPDF417/pdf417.js"></script>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <script>
+    
+
+        function showWelcomeMessage() {
+            const welcomePrompt = document.getElementById('welcomePrompt');
+            welcomePrompt.style.display = 'block';
+            setTimeout(() => {
+                welcomePrompt.style.display = 'none';
+                document.getElementById('qrSection').style.display = 'block';
+                startBarcodeScanner(); // Start barcode scanner after showing the welcome message
+            }, 2000);
+        }
+
+        // Barcode Scanner (Supports multiple formats, including PDF417)
+        let codeReader = new ZXing.BrowserMultiFormatReader();
+
+        function startBarcodeScanner() {
+            codeReader.decodeFromVideoDevice(null, 'qrVideo', (result, err) => {
+                if (result) {
+                    document.getElementById('qrData').innerHTML = `Barcode Data: ${result.text}`;
+                    document.getElementById('qrData').style.display = 'block';
+                    document.getElementById('nextStep').style.display = 'inline'; // Show Next Step button
+                    codeReader.reset();
+                }
+                if (err && !(err instanceof ZXing.NotFoundException)) {
+                    console.error(err);
+                }
+
+                //const decoder = new PDF417();
+  //const canvas = document.getElementById('canvas'); // your canvas or image element
+  //const result1 = decoder.decode(canvas);
+  //console.log(result1);
+            });
+        }
+
+        function goToNextStep() {
+            document.getElementById('qrSection').style.display = 'none';
+            document.getElementById('passportSection').style.display = 'block'; // Show passport section
+            openPassportCamera(); // Automatically open the passport camera
+        }
+
+        // Passport Camera Handling
+        let passportStream = null;
+        let usingBackCamera = false;
+
+        function openPassportCamera(backCamera = false) {
+            const constraints = {
+                video: {
+                    facingMode: backCamera ? { ideal: "environment" } : "user"
+                }
+            };
+            
+            navigator.mediaDevices.getUserMedia(constraints)
+                .then(stream => {
+                    passportStream = stream;
+                    const video = document.getElementById('passportVideo');
+                    video.srcObject = stream;
+                    video.play();
+                    document.getElementById('passportVideoContainer').style.display = 'block';
+                    document.getElementById('passportPreview').style.display = 'none';
+                    document.getElementById('passportValidated').style.display = 'none';
+                    document.getElementById('passportNotValidated').style.display = 'none';
+                })
+                .catch(error => console.error('Error accessing camera for passport:', error));
+        }
+
+        function flipCamera() {
+            usingBackCamera = !usingBackCamera;
+            if (passportStream) {
+                passportStream.getTracks().forEach(track => track.stop());
+            }
+            openPassportCamera(usingBackCamera);
+        }
+
+        function takePassportPhoto() {
+            if (passportStream) {
+                const video = document.getElementById('passportVideo');
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const context = canvas.getContext('2d');
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const passportPreview = document.getElementById('passportPreview');
+                passportPreview.src = canvas.toDataURL('image/png');
+                passportPreview.style.display = 'block';
+                document.getElementById('passportVideoContainer').style.display = 'none';
+                passportStream.getTracks().forEach(track => track.stop()); // Stop video stream
+                passportStream = null;
+
+                validatePassport(canvas.toDataURL('image/png'));
+            }
+        }
+
+        function validatePassport(imageData) {
+    document.getElementById('loadingSpinner').style.display = 'flex'; 
+
+    Tesseract.recognize(
+        imageData,
+        'eng'
+    ).then(({ data: { text } }) => {
+        document.getElementById('loadingSpinner').style.display = 'none'; 
+        const validationResults = validateText(text);
+        if (validationResults.isValid) {
+            document.getElementById('passportValidated').style.display = 'inline';
+            document.getElementById('passportNotValidated').style.display = 'none';
+            document.getElementById('passportSection').style.display = 'none'; // Hide passport section
+            generateCoupon(); // Call to generate coupon after validation
+        } else {
+            document.getElementById('passportValidated').style.display = 'none';
+            document.getElementById('passportNotValidated').style.display = 'inline';
+            openPassportCamera();  // Reopen camera for rescan
+        }
+    }).catch(error => {
+        console.error('Error during OCR processing:', error);
+        document.getElementById('loadingSpinner').style.display = 'none'; 
+        document.getElementById('passportValidated').style.display = 'none';
+        document.getElementById('passportNotValidated').style.display = 'inline';
+        openPassportCamera();  // Reopen camera for rescan
+    });
+}
+
+
+        function validateText(extractedText) {
+            if (!extractedText) {
+                return { isValid: false, details: { error: "Failed to extract text" } };
+            }
+
+            const barcodes = ['<', '<<', '<<<', '<<<<', '<<<<<', '<<<<<<'];
+            const lines = extractedText.split('\n').map(line => line.trim());
+            const isValid = lines.some(line => barcodes.some(barcode => line.includes(barcode)));
+
+            return { isValid, details: isValid ? {} : { error: "Passport format not recognized" } };
+        }
+
+        // Function to generate WiFi coupon using API
+        function generateCoupon() {
+            const wifi_payload = {
+                "pnr": "ABC1234",
+                "identityNo": "ABCD3443",
+                "location": "Delhi",
+                "userType": "Domestic",
+                "identityType": "Passport",
+                "serialNo": "007",
+                "expiryDate": "30-05-2022"
+            };
+
+            const requestOptions = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'AuthKey': '685e968a14eaeeade097555e514cf2c1'
+                },
+                body: JSON.stringify(wifi_payload)
+            };
+
+            fetch('http://wifi.i-on.in:85/Wairport/rest/generateCoupon', requestOptions)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('couponCode').innerText = `Your WiFi Coupon Code: ${data.couponCode}`;
+                    document.getElementById('couponSection').style.display = 'block'; // Show coupon section
+                })
+                .catch(error => {
+                    console.error('Error generating coupon:', error);
+                });
+        }
+
+        function printCoupon() {
+            const couponCode = document.getElementById('couponCode').innerText;
+            const printWindow = window.open('', '', 'width=400,height=400');
+            printWindow.document.write(`<html><head><title>Coupon</title></head><body>${couponCode}</body></html>`);
+            printWindow.document.close();
+            printWindow.print();
+        }
+    </script>
+</body>
+</html>
