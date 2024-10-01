@@ -6,26 +6,71 @@
     <title>Passport Validation with WiFi Coupon</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f4f8;
+            color: #333;
             text-align: center;
+            margin: 0;
+            padding: 20px;
         }
-        #welcomePrompt, #qrSection, #passportSection, #couponSection {
+        h1, h2 {
+            color: #2c3e50;
+        }
+        #welcomePrompt {
+            margin-bottom: 20px;
+        }
+        .section {
             display: none;
+            margin: 20px auto;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+            max-width: 600px;
         }
         #qrVideo, #passportVideo {
             width: 100%;
-            max-width: 600px;
+            border-radius: 8px;
         }
         #couponCode {
             margin-top: 20px;
             font-size: 24px;
             font-weight: bold;
+            color: #27ae60;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #2980b9;
+            color: white;
+        }
+        #nextStepQR, #nextStepPassport {
+            background-color: #3498db;
+            color: white;
+        }
+        #printButton {
+            background-color: #2ecc71;
+            color: white;
         }
         .hidden {
             display: none;
         }
         #passportCanvas {
             display: none; /* Hide the canvas, used for pre-processing */
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            button {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -35,14 +80,14 @@
         <h1>Welcome to the WiFi Coupon Generation System!</h1>
     </div>
 
-    <div id="qrSection">
+    <div id="qrSection" class="section">
         <h2>Scan Boarding Pass QR Code</h2>
         <video id="qrVideo" autoplay></video>
         <div id="qrData"></div>
         <button id="nextStepQR" class="hidden" onclick="goToPassportScan()">Next Step</button>
     </div>
 
-    <div id="passportSection" class="hidden">
+    <div id="passportSection" class="section">
         <h2>Scan Passport Barcode (Code 128)</h2>
         <video id="passportVideo" autoplay></video>
         <canvas id="passportCanvas"></canvas> <!-- Canvas for video processing -->
@@ -50,7 +95,7 @@
         <button id="nextStepPassport" class="hidden" onclick="generateCoupon()">Get WiFi Coupon</button>
     </div>
 
-    <div id="couponSection" class="hidden">
+    <div id="wifiSection" class="section">
         <div id="couponCode"></div>
         <button id="printButton" onclick="printCoupon()">Print Receipt</button>
     </div>
@@ -102,7 +147,8 @@
                 if (result) {
                     document.getElementById(dataElementId).innerHTML = `Barcode Data: ${result.text}`;
                     document.getElementById(nextButtonId).classList.remove('hidden');
-                    codeReader.reset(); // Stop the barcode reader after successful scan
+                    // Stop the barcode reader after successful scan and display the passport data
+                    codeReader.reset(); 
                 }
                 if (err && !(err instanceof ZXing.NotFoundException)) {
                     console.error(err);
@@ -137,6 +183,12 @@
         }
 
         function generateCoupon() {
+            // Hide the passport section after displaying the passport data
+            document.getElementById('passportSection').style.display = 'none';
+
+            // Display WiFi section
+            document.getElementById('wifiSection').style.display = 'block';
+
             const wifi_payload = {
                 "pnr": "ABC1234",
                 "identityNo": "ABCD3443",
@@ -152,7 +204,7 @@
                 headers: {
                     'Content-Type': 'application/json',
                     'AuthKey': '685e968a14eaeeade097555e514cf2c1'
-            },
+                },
                 body: JSON.stringify(wifi_payload)
             };
 
@@ -160,7 +212,6 @@
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('couponCode').innerText = `Your WiFi Coupon Code: ${data.couponCode}`;
-                    document.getElementById('couponSection').style.display = 'block'; 
                 })
                 .catch(error => {
                     console.error('Error generating coupon:', error);
